@@ -61,12 +61,12 @@ def train_tree(
         dataset: QuantizedDataset,
         running_predictions: Array,
         height: int,
-        bin_number: int,
+        feature_bin_number: int,
         regularization_coefficient: float,
         leaf_weight_update_number: int,
         learning_rate: float
         ) -> tuple[Array, Array, Array, Array]:
-    feature_collections, bin_edge_collections, labels, weights = dataset
+    feature_collections, feature_bin_collections, labels, weights = dataset
 
     sample_number, feature_number = feature_collections.shape
 
@@ -94,7 +94,7 @@ def train_tree(
 
         level_split_feature_indexes, level_quantized_split_thresholds = \
             _compute_split(
-                level_leaf_number, feature_number, bin_number,
+                level_leaf_number, feature_number, feature_bin_number,
                 leaf_indexes, feature_indexes, feature_collections,
                 addend_pairs, regularization_coefficient
             )
@@ -130,7 +130,7 @@ def train_tree(
         leaf_weight_update_number, per_sample_derivative_fn
     )*learning_rate
 
-    split_thresholds = bin_edge_collections[
+    split_thresholds = feature_bin_collections[
         split_feature_indexes, quantized_split_thresholds
     ]
 
@@ -155,7 +155,7 @@ def _compute_addend_pairs(
 def _compute_split(
         leaf_number: int,
         feature_number: int,
-        bin_number: int,
+        feature_bin_number: int,
         leaf_indexes: Array,
         feature_indexes: Array,
         feature_collections: Array,
@@ -166,7 +166,7 @@ def _compute_split(
         shape=(
             leaf_number,
             feature_number,
-            bin_number,
+            feature_bin_number,
             addend_pairs.shape[-1]
         )
     ).at[

@@ -3,9 +3,9 @@ from pathlib import Path
 from typing import Callable, NamedTuple, Self
 
 import jax
+from jax import Array
 import jax.numpy as jnp
 import numpy as np
-from jax import Array
 
 from dataset_wrappers import Dataset, QuantizedDataset
 from tree import evaluate_tree, train_tree
@@ -140,7 +140,7 @@ def train_forest(
         regularization_coefficient: float,
         leaf_weight_update_number: int,
         learning_rate: float,
-        bin_number: float,
+        feature_bin_number: float,
         training_dataset: QuantizedDataset,
         validation_dataset: Dataset
         ) -> Forest:
@@ -156,7 +156,9 @@ def train_forest(
         jax.value_and_grad(jax.grad(per_sample_loss_fn))
     ))
 
-    quantized_training_dataset = quantize_dataset(training_dataset, bin_number)
+    quantized_training_dataset = quantize_dataset(
+        training_dataset, feature_bin_number
+    )
 
     def update_forest(
             iteration: Array,
@@ -170,7 +172,7 @@ def train_forest(
                     quantized_training_dataset,
                     state.running_training_predictions,
                     height,
-                    bin_number,
+                    feature_bin_number,
                     regularization_coefficient,
                     leaf_weight_update_number,
                     learning_rate
@@ -309,29 +311,29 @@ def train_forest(
     return forest
 
 
-def quantize_dataset(dataset: Dataset, bin_number: int) -> QuantizedDataset:
+def quantize_dataset(
+        dataset: Dataset,
+        feature_bin_number: int
+        ) -> QuantizedDataset:
     feature_collections, labels, weights = dataset
 
-    quantiles = jnp.linspace(0.0, 1.0, bin_number + 1)
+    feature_quantiles = jnp.linspace(0.0, 1.0, feature_bin_number + 1)[1:-1]
 
     def quantize_features(features: Array) -> tuple[Array, Array]:
-        bin_edges = jnp.quantile(features, quantiles)[1:-1]
+        feature_bins = jnp.quantile(features, feature_quantiles)
 
         quantized_features = jnp.digitize(
-            features, bin_edges, right=True
+            features, feature_bins, right=True
         ).astype(jnp.uint8)
 
-        return quantized_features, bin_edges
+        return quantized_features, feature_bins
 
-    transposed_quantized_feature_collections, bin_edge_collections = \
-        jax.lax.map(quantize_features, feature_collections.transpose())
-
-    quantized_feature_collections = \
-        transposed_quantized_feature_collections.transpose()
+    quantized_feature_collections, feature_bin_collections = \
+        jax.vmap(quantize_features, 1, (1, 0))(feature_collections)
 
     quantized_dataset = QuantizedDataset(
         quantized_feature_collections,
-        bin_edge_collections,
+        feature_bin_collections,
         labels,
         weights
     )

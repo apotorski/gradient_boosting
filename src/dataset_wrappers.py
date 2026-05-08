@@ -11,6 +11,6 @@ class Dataset(NamedTuple):
 
 class QuantizedDataset(NamedTuple):
     feature_collections: Array
-    bin_edge_collections: Array
+    feature_bin_collections: Array
     labels: Array
     weights: Array

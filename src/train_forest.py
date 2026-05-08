@@ -77,7 +77,7 @@ def train_model(
         regularization_coefficient: float,
         leaf_weight_update_number: int,
         learning_rate: float,
-        bin_number: int,
+        feature_bin_number: int,
         dataset: Dataset,
         validation_size: float,
         key: Array
@@ -92,7 +92,7 @@ def train_model(
         regularization_coefficient,
         leaf_weight_update_number,
         learning_rate,
-        bin_number,
+        feature_bin_number,
         training_dataset,
         validation_dataset
     )
@@ -117,7 +117,7 @@ def main(
         regularization_coefficient: float,
         leaf_weight_update_number: int,
         learning_rate: float,
-        bin_number: int,
+        feature_bin_number: int,
         test_size: float,
         validation_size: float
         ) -> None:
@@ -136,7 +136,7 @@ def main(
         regularization_coefficient,
         leaf_weight_update_number,
         learning_rate,
-        bin_number,
+        feature_bin_number,
         training_dataset,
         validation_size,
         subkey
@@ -157,7 +157,7 @@ if __name__ == '__main__':
     parser.add_argument('--regularization_coefficient', type=float)
     parser.add_argument('--leaf_weight_update_number', type=int)
     parser.add_argument('--learning_rate', type=float)
-    parser.add_argument('--bin_number', type=int)
+    parser.add_argument('--feature_bin_number', type=int)
     parser.add_argument('--test_size', type=float)
     parser.add_argument('--validation_size', type=float)
 
