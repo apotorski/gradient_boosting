@@ -83,4 +83,4 @@ python src/train_forest.py \
 ```
 
 ## References
-[Chen, T. and Guestrin, C., 2016. XGBoost: A Scalable Tree Boosting System. arXiv preprint arXiv:1603.02754.](https://arxiv.org/abs/1603.02754)
+[Chen, T., & Guestrin, C. (2016). XGBoost: A Scalable Tree Boosting System. In *Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining* (pp. 785-794).](https://dl.acm.org/doi/10.1145/2939672.2939785)
