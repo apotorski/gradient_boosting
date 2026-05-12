@@ -76,7 +76,7 @@ python src/train_forest.py \
     --height 6 \
     --regularization_coefficient 1.0 \
     --leaf_weight_update_number 10 \
-    --learning_rate 0.5 \
+    --learning_rate 0.01 \
     --feature_bin_number 256 \
     --test_size 0.2 \
     --validation_size 0.2

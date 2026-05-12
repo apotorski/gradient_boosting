@@ -14,19 +14,19 @@ from tree import evaluate_tree, train_tree
 class Forest:
 
     _height: int
-    _split_feature_index_collections: Array
+    _split_feature_idx_collections: Array
     _split_threshold_collections: Array
     _leaf_weight_collections: Array
 
     def __init__(
             self,
             height: int,
-            split_feature_index_collections: Array,
+            split_feature_idx_collections: Array,
             split_threshold_collections: Array,
             leaf_weight_collections: Array
             ) -> None:
         self._height = height
-        self._split_feature_index_collections = split_feature_index_collections
+        self._split_feature_idx_collections = split_feature_idx_collections
         self._split_threshold_collections = split_threshold_collections
         self._leaf_weight_collections = leaf_weight_collections
 
@@ -34,7 +34,7 @@ class Forest:
         def update_predictions(iteration: Array, predictions: Array) -> Array:
             return predictions + evaluate_tree(
                 self._height,
-                self._split_feature_index_collections[iteration],
+                self._split_feature_idx_collections[iteration],
                 self._split_threshold_collections[iteration],
                 self._leaf_weight_collections[iteration],
                 feature_collections
@@ -55,9 +55,9 @@ class Forest:
         buffer = np.empty(1, dtype=np.dtype([
             ('height', np.int64),
             (
-                'split_feature_index_collections',
-                self._split_feature_index_collections.dtype,
-                self._split_feature_index_collections.shape
+                'split_feature_idx_collections',
+                self._split_feature_idx_collections.dtype,
+                self._split_feature_idx_collections.shape
             ),
             (
                 'split_threshold_collections',
@@ -72,8 +72,8 @@ class Forest:
         ]))
 
         buffer['height'] = np.int64(self._height)
-        buffer['split_feature_index_collections'] = np.asarray(
-            self._split_feature_index_collections
+        buffer['split_feature_idx_collections'] = np.asarray(
+            self._split_feature_idx_collections
         )
         buffer['split_threshold_collections'] = np.asarray(
             self._split_threshold_collections
@@ -85,12 +85,12 @@ class Forest:
         np.save(forest_save_path, buffer)
 
     @classmethod
-    def load(cls, forest_save_path: Path) -> Self:
-        buffer, = np.load(forest_save_path)
+    def load(cls, forest_load_path: Path) -> Self:
+        buffer, = np.load(forest_load_path)
 
         height = int(buffer['height'])
-        split_feature_index_collections = jnp.asarray(
-            buffer['split_feature_index_collections']
+        split_feature_idx_collections = jnp.asarray(
+            buffer['split_feature_idx_collections']
         )
         split_threshold_collections = jnp.asarray(
             buffer['split_threshold_collections']
@@ -101,14 +101,14 @@ class Forest:
 
         return cls(
             height,
-            split_feature_index_collections,
+            split_feature_idx_collections,
             split_threshold_collections,
             leaf_weight_collections
         )
 
     @property
-    def split_feature_index_collections(self) -> Array:
-        return self._split_feature_index_collections
+    def split_feature_idx_collections(self) -> Array:
+        return self._split_feature_idx_collections
 
     @property
     def split_threshold_collections(self) -> Array:
@@ -121,7 +121,7 @@ class Forest:
 
 class ForestUpdateState(NamedTuple):
 
-    split_feature_index_collections: Array
+    split_feature_idx_collections: Array
     split_threshold_collections: Array
     leaf_weight_collections: Array
     running_training_predictions: Array
@@ -164,7 +164,7 @@ def train_forest(
             iteration: Array,
             state: ForestUpdateState
             ) -> ForestUpdateState:
-        split_feature_indexes, split_thresholds, \
+        split_feature_idxs, split_thresholds, \
             leaf_weights, training_predictions = \
                 train_tree(
                     loss_fn,
@@ -178,9 +178,9 @@ def train_forest(
                     learning_rate
                 )
 
-        split_feature_index_collections = \
-            state.split_feature_index_collections \
-                .at[iteration].set(split_feature_indexes)
+        split_feature_idx_collections = \
+            state.split_feature_idx_collections \
+                .at[iteration].set(split_feature_idxs)
 
         split_threshold_collections = \
             state.split_threshold_collections \
@@ -197,7 +197,7 @@ def train_forest(
 
         validation_predictions = evaluate_tree(
             height,
-            split_feature_indexes,
+            split_feature_idxs,
             split_thresholds,
             leaf_weights,
             validation_dataset.feature_collections
@@ -229,7 +229,7 @@ def train_forest(
         )
 
         return ForestUpdateState(
-            split_feature_index_collections,
+            split_feature_idx_collections,
             split_threshold_collections,
             leaf_weight_collections,
             running_training_predictions,
@@ -242,7 +242,7 @@ def train_forest(
     leaf_number = 2**height
     split_number = leaf_number - 1
 
-    split_feature_index_collections = jnp.empty(
+    split_feature_idx_collections = jnp.empty(
         shape=(iteration_number, split_number),
         dtype=jnp.uint32
     )
@@ -266,7 +266,7 @@ def train_forest(
     best_iteration = 0
 
     forest_update_state = ForestUpdateState(
-        split_feature_index_collections,
+        split_feature_idx_collections,
         split_threshold_collections,
         leaf_weight_collections,
         running_training_predictions,
@@ -286,8 +286,8 @@ def train_forest(
 
     tree_number = best_iteration + 1
 
-    split_feature_index_collections = forest_update_state \
-        .split_feature_index_collections.at[:tree_number].get()
+    split_feature_idx_collections = forest_update_state \
+        .split_feature_idx_collections.at[:tree_number].get()
 
     split_threshold_collections = forest_update_state \
         .split_threshold_collections.at[:tree_number].get()
@@ -297,7 +297,7 @@ def train_forest(
 
     forest = Forest(
         height,
-        split_feature_index_collections,
+        split_feature_idx_collections,
         split_threshold_collections,
         leaf_weight_collections
     )

@@ -11,42 +11,42 @@ EPSILON = jnp.float32(1e-8)
 
 def evaluate_tree(
         height: int,
-        split_feature_indexes: Array,
+        split_feature_idxs: Array,
         split_thresholds: Array,
         leaf_weights: Array,
         feature_collections: Array
         ) -> Array:
     sample_number = len(feature_collections)
-    sample_indexes = jnp.arange(sample_number)
+    sample_idxs = jnp.arange(sample_number)
 
-    def update_node_indexes(_: Array, node_indexes: Array) -> Array:
+    def update_node_idxs(_: Array, node_idxs: Array) -> Array:
         features = feature_collections[
-            sample_indexes,
-            split_feature_indexes[
-                node_indexes
+            sample_idxs,
+            split_feature_idxs[
+                node_idxs
             ]
         ]
 
         outcomes = jnp.greater(
             features,
             split_thresholds[
-                node_indexes
+                node_idxs
             ]
         )
 
-        node_indexes = 2*node_indexes + jnp.where(outcomes, 2, 1)
+        node_idxs = 2*node_idxs + jnp.where(outcomes, 2, 1)
 
-        return node_indexes
+        return node_idxs
 
-    node_indexes = jnp.zeros(sample_number, dtype=jnp.uint32)
-    node_indexes: Array = jax.lax.fori_loop(
-        0, height, update_node_indexes, node_indexes
+    node_idxs = jnp.zeros(sample_number, dtype=jnp.uint32)
+    node_idxs: Array = jax.lax.fori_loop(
+        0, height, update_node_idxs, node_idxs
     )
 
     split_number = 2**height - 1
-    leaf_indexes = node_indexes - split_number
+    leaf_idxs = node_idxs - split_number
 
-    predictions = leaf_weights[leaf_indexes]
+    predictions = leaf_weights[leaf_idxs]
 
     return predictions
 
@@ -70,10 +70,10 @@ def train_tree(
 
     sample_number, feature_number = feature_collections.shape
 
-    sample_indexes = jnp.arange(sample_number, dtype=jnp.uint32)
-    feature_indexes = jnp.arange(feature_number, dtype=jnp.uint32)
+    sample_idxs = jnp.arange(sample_number, dtype=jnp.uint32)
+    feature_idxs = jnp.arange(feature_number, dtype=jnp.uint32)
 
-    leaf_indexes = jnp.zeros(sample_number, dtype=jnp.uint32)
+    leaf_idxs = jnp.zeros(sample_number, dtype=jnp.uint32)
 
     addend_pairs = _compute_addend_pairs(
         per_sample_derivative_fn, running_predictions, labels, weights
@@ -82,61 +82,61 @@ def train_tree(
     leaf_number = 2**height
     split_number = leaf_number - 1
 
-    split_feature_indexes = jnp.empty(split_number, dtype=jnp.uint32)
+    split_feature_idxs = jnp.empty(split_number, dtype=jnp.uint32)
     quantized_split_thresholds = jnp.empty(split_number, dtype=jnp.uint32)
 
-    start_node_index = end_node_index = 0
+    start_node_idx = end_node_idx = 0
     for level in range(height):
         level_leaf_number = 2**level
 
-        start_node_index = end_node_index
-        end_node_index = start_node_index + level_leaf_number
+        start_node_idx = end_node_idx
+        end_node_idx = start_node_idx + level_leaf_number
 
-        level_split_feature_indexes, level_quantized_split_thresholds = \
+        level_split_feature_idxs, level_quantized_split_thresholds = \
             _compute_split(
                 level_leaf_number, feature_number, feature_bin_number,
-                leaf_indexes, feature_indexes, feature_collections,
+                leaf_idxs, feature_idxs, feature_collections,
                 addend_pairs, regularization_coefficient
             )
 
-        split_feature_indexes = split_feature_indexes \
-            .at[start_node_index:end_node_index] \
-                .set(level_split_feature_indexes)
+        split_feature_idxs = split_feature_idxs \
+            .at[start_node_idx:end_node_idx] \
+                .set(level_split_feature_idxs)
 
         quantized_split_thresholds = quantized_split_thresholds \
-            .at[start_node_index:end_node_index] \
+            .at[start_node_idx:end_node_idx] \
                 .set(level_quantized_split_thresholds)
 
         features = feature_collections[
-            sample_indexes,
-            level_split_feature_indexes[
-                leaf_indexes
+            sample_idxs,
+            level_split_feature_idxs[
+                leaf_idxs
             ]
         ]
 
         level_outcomes = jnp.greater(
             features,
             level_quantized_split_thresholds[
-                leaf_indexes
+                leaf_idxs
             ]
         )
 
-        leaf_indexes = 2*leaf_indexes + jnp.where(level_outcomes, 1, 0)
+        leaf_idxs = 2*leaf_idxs + jnp.where(level_outcomes, 1, 0)
 
     leaf_weights = _compute_leaf_weights(
-        leaf_number, leaf_indexes, addend_pairs,
+        leaf_number, leaf_idxs, addend_pairs,
         regularization_coefficient,
         loss_fn, running_predictions, labels, weights,
         leaf_weight_update_number, per_sample_derivative_fn
     )*learning_rate
 
     split_thresholds = feature_bin_collections[
-        split_feature_indexes, quantized_split_thresholds
+        split_feature_idxs, quantized_split_thresholds
     ]
 
-    predictions = leaf_weights[leaf_indexes]
+    predictions = leaf_weights[leaf_idxs]
 
-    return split_feature_indexes, split_thresholds, leaf_weights, predictions
+    return split_feature_idxs, split_thresholds, leaf_weights, predictions
 
 
 def _compute_addend_pairs(
@@ -156,8 +156,8 @@ def _compute_split(
         leaf_number: int,
         feature_number: int,
         feature_bin_number: int,
-        leaf_indexes: Array,
-        feature_indexes: Array,
+        leaf_idxs: Array,
+        feature_idxs: Array,
         feature_collections: Array,
         addend_pairs: Array,
         regularization_coefficient: float
@@ -171,8 +171,8 @@ def _compute_split(
         )
     ).at[
         (
-            leaf_indexes[:, jnp.newaxis],
-            feature_indexes[jnp.newaxis, :],
+            leaf_idxs[:, jnp.newaxis],
+            feature_idxs[jnp.newaxis, :],
             feature_collections
         )
     ].add(
@@ -182,7 +182,7 @@ def _compute_split(
     cumulative_sum_pairs = jnp.cumsum(sum_pairs, axis=2)
 
     left_sum_pairs = cumulative_sum_pairs[:, :, :-1]
-    total_sum_pairs = cumulative_sum_pairs[:, :, -1, jnp.newaxis]
+    total_sum_pairs = cumulative_sum_pairs[:, :, [-1]]
     right_sum_pairs = total_sum_pairs - left_sum_pairs
 
     left_proxy_scores = _compute_proxy_scores(
@@ -194,18 +194,18 @@ def _compute_split(
 
     proxy_scores = left_proxy_scores + right_proxy_scores
 
-    feature_indexes, quantized_thresholds = jnp.unravel_index(
+    feature_idxs, quantized_thresholds = jnp.unravel_index(
         proxy_scores.reshape(proxy_scores.shape[0], -1).argmax(axis=1),
         proxy_scores.shape[1:]
     )
 
-    return feature_indexes.astype(jnp.uint32), \
+    return feature_idxs.astype(jnp.uint32), \
         quantized_thresholds.astype(jnp.uint32)
 
 
 def _compute_leaf_weights(
         leaf_number: int,
-        leaf_indexes: Array,
+        leaf_idxs: Array,
         addend_pairs: Array,
         regularization_coefficient: float,
         loss_fn: Callable[
@@ -220,14 +220,14 @@ def _compute_leaf_weights(
         ]
         ) -> Array:
     def update_leaf_weights(_: Array, leaf_weights: Array) -> Array:
-        updated_predictions = predictions + leaf_weights[leaf_indexes]
+        updated_predictions = predictions + leaf_weights[leaf_idxs]
 
         updated_addend_pairs = _compute_addend_pairs(
             per_sample_derivative_fn, updated_predictions, labels, weights
         )
 
         delta_leaf_weights = _compute_delta_leaf_weights(
-            leaf_number, leaf_indexes, updated_addend_pairs,
+            leaf_number, leaf_idxs, updated_addend_pairs,
             regularization_coefficient,
             loss_fn, updated_predictions, labels, weights
         )
@@ -235,7 +235,7 @@ def _compute_leaf_weights(
         return leaf_weights + delta_leaf_weights
 
     leaf_weights = _compute_delta_leaf_weights(
-        leaf_number, leaf_indexes, addend_pairs,
+        leaf_number, leaf_idxs, addend_pairs,
         regularization_coefficient,
         loss_fn, predictions, labels, weights
     )
@@ -261,7 +261,7 @@ def _compute_proxy_scores(
 
 def _compute_delta_leaf_weights(
         leaf_number: int,
-        leaf_indexes: Array,
+        leaf_idxs: Array,
         addend_pairs: Array,
         regularization_coefficient: float,
         loss_fn: Callable[
@@ -272,7 +272,7 @@ def _compute_delta_leaf_weights(
         weights: Array
         ) -> Array:
     sum_pairs = jnp.zeros(shape=(leaf_number, addend_pairs.shape[-1])) \
-        .at[leaf_indexes].add(addend_pairs)
+        .at[leaf_idxs].add(addend_pairs)
 
     gradients, hessians = sum_pairs[..., 0], sum_pairs[..., 1]
 
@@ -282,7 +282,7 @@ def _compute_delta_leaf_weights(
     previous_loss = loss_fn(predictions, labels, weights)
 
     def check_decrease_condition(step_length: Array) -> Array:
-        delta_predictions = (step_length*delta_leaf_weights)[leaf_indexes]
+        delta_predictions = (step_length*delta_leaf_weights)[leaf_idxs]
 
         loss = loss_fn(predictions + delta_predictions, labels, weights)
 

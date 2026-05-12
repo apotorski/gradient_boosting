@@ -3,29 +3,31 @@ import argparse
 import logging
 
 import jax
-import jax.numpy as jnp
 from jax import Array
+from jax.nn import log_sigmoid
+import jax.numpy as jnp
 
 from dataset_wrappers import Dataset
 from forest import Forest, train_forest
+from sample_generators import generate_moons
 
 
-def per_sample_loss_fn(predictions: Array, labels: Array) -> Array:
-    return jnp.square(labels - predictions)
+def per_sample_loss_fn(logits: Array, labels: Array) -> Array:
+    return (1 - labels)*logits - log_sigmoid(logits)
 
 
-def generate_dataset() -> Dataset:
-    feature_collections = jnp.column_stack(
-        tuple(map(
-            jnp.ravel,
-            jnp.meshgrid(
-                jnp.linspace(-2.0, 2.0, 2**10),
-                jnp.linspace(-2.0, 2.0, 2**10)
-            )
-        ))
-    )
-    labels = jnp.square(feature_collections).sum(axis=1)
-    weights = jnp.ones_like(labels)
+def create_dataset(key: Array) -> Dataset:
+    feature_collections, labels = generate_moons(key)
+
+    sample_number = labels.size
+    negative_sample_number, positive_sample_number = jnp.bincount(labels)
+
+    negative_sample_weight = sample_number/negative_sample_number/2
+    positive_sample_weight = sample_number/positive_sample_number/2
+
+    weights = jnp.empty(sample_number) \
+        .at[labels == 0].set(negative_sample_weight) \
+        .at[labels == 1].set(positive_sample_weight)
 
     dataset = Dataset(feature_collections, labels, weights)
 
@@ -39,22 +41,41 @@ def split_dataset(
         ) -> tuple[Dataset, Dataset]:
     feature_collections, labels, weights = dataset
 
-    sample_number = len(labels)
+    negative_sample_idxs, = jnp.nonzero(labels == 0)
+    positive_sample_idxs, = jnp.nonzero(labels == 1)
 
-    sample_indexes = jnp.arange(sample_number)
-    shuffled_sample_indexes = jax.random.permutation(key, sample_indexes)
+    key, subkey = jax.random.split(key)
+    negative_sample_idxs = jax.random.permutation(subkey, negative_sample_idxs)
 
-    split_index = round(test_size*sample_number)
-    test_indexes = shuffled_sample_indexes[:split_index]
-    training_indexes = shuffled_sample_indexes[split_index:]
+    key, subkey = jax.random.split(key)
+    positive_sample_idxs = jax.random.permutation(subkey, positive_sample_idxs)
 
-    test_feature_collections = feature_collections[test_indexes]
-    test_labels = labels[test_indexes]
-    test_weights = weights[test_indexes]
+    negative_sample_split_idx = round(test_size*negative_sample_idxs.size)
+    positive_sample_split_idx = round(test_size*positive_sample_idxs.size)
 
-    training_feature_collections = feature_collections[training_indexes]
-    training_labels = labels[training_indexes]
-    training_weights = weights[training_indexes]
+    test_sample_idxs = jnp.concatenate([
+        negative_sample_idxs[:negative_sample_split_idx],
+        positive_sample_idxs[:positive_sample_split_idx]
+    ])
+
+    training_sample_idxs = jnp.concatenate([
+        negative_sample_idxs[negative_sample_split_idx:],
+        positive_sample_idxs[positive_sample_split_idx:]
+    ])
+
+    key, subkey = jax.random.split(key)
+    test_sample_idxs = jax.random.permutation(subkey, test_sample_idxs)
+
+    key, subkey = jax.random.split(key)
+    training_sample_idxs = jax.random.permutation(subkey, training_sample_idxs)
+
+    test_feature_collections = feature_collections[test_sample_idxs]
+    test_labels = labels[test_sample_idxs]
+    test_weights = weights[test_sample_idxs]
+
+    training_feature_collections = feature_collections[training_sample_idxs]
+    training_labels = labels[training_sample_idxs]
+    training_weights = weights[training_sample_idxs]
 
     test_dataset = Dataset(
         test_feature_collections,
@@ -123,7 +144,8 @@ def main(
         ) -> None:
     key = jax.random.key(seed=0)
 
-    dataset = generate_dataset()
+    key, subkey = jax.random.split(key)
+    dataset = create_dataset(subkey)
 
     key, subkey = jax.random.split(key)
     test_dataset, training_dataset = \
@@ -151,7 +173,7 @@ if __name__ == '__main__':
         level=logging.INFO
     )
 
-    parser = argparse.ArgumentParser(description='Train the regressor.')
+    parser = argparse.ArgumentParser(description='Train the decision forest.')
     parser.add_argument('--iteration_number', type=int)
     parser.add_argument('--height', type=int)
     parser.add_argument('--regularization_coefficient', type=float)
